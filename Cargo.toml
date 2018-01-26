@@ -1,0 +1,11 @@
+[package]
+
+name = "rust_bot"
+version = "0.0.1"
+authors = ["Billy Rhoades <billyarhoades@gmail.com>"]
+
+[dependencies]
+
+"irc" = { version = "0.12" }
+#"discord" = { version = "0.7" }
+#"openssl-sys" = { version = "0.9.24" }
