@@ -1,7 +1,10 @@
 extern crate irc;
 
 use std::default::Default;
+use std::vec::Vec;
 use irc::client::prelude::*;
+use irc::proto::message::Message;
+use std::fmt;
 
 fn main() {
     let cfg = Config {
@@ -17,8 +20,43 @@ fn main() {
     println!("Connecting...");
     server.identify().unwrap();
     println!("Ready!");
-    server.for_each_incoming(|message| {
-        // Do message processing.
-        println!("{:?}", message);
-    }).unwrap();
+    server.for_each_incoming(handle_message).unwrap();
+}
+
+fn handle_message(message: Message) {
+    println!("{:?}", message);
+    match message.command {
+        Command::PRIVMSG(ref channel, ref msg) => {
+            if msg.starts_with("!") {
+                let command = process_command(channel, msg);
+                println!("\t{:?}", command);
+            }
+        }
+        _ => ()
+    }
+}
+
+fn process_command(channel: &String, message: &String) -> CommandEvent {
+    let mut iter = message.split_whitespace();
+    let command = iter.next().unwrap();
+
+    CommandEvent {
+        message: message.to_owned(),
+        name: command.to_owned(),
+        args: iter.map(|s: &str| {s.to_owned()}).collect(),
+        channel: channel.to_owned()
+    }
+}
+
+struct CommandEvent {
+    message: String,
+    name: String,
+    channel: String,
+    args: Vec<String>
+}
+
+impl fmt::Debug for CommandEvent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {} {:?}", self.channel, self.name, self.args)
+    }
 }
