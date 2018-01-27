@@ -1,6 +1,6 @@
 extern crate irc;
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
+
 mod btc;
 mod events;
 

@@ -5,15 +5,14 @@ extern crate serde_json;
 extern crate hyper_tls;
 
 use std::io;
-use self::futures::{Future,Stream};
-use self::futures::{future,AndThen};
-use self::hyper::{Client,Chunk,Error,Body,Response};
-use self::hyper::client::{FutureResponse,HttpConnector};
-use self::serde_json::Value;
-use self::hyper_tls::HttpsConnector;
-use events::CommandEvent;
-use irc::client::prelude::*;
+use std::thread;
 use std::fmt::Debug;
+use irc::client::prelude::*;
+use events::CommandEvent;
+use self::futures::{Future,Stream};
+use self::hyper::{Client};
+use self::hyper::client::{HttpConnector};
+use self::hyper_tls::HttpsConnector;
 
 fn get_client<F,G>(cb: F)
     where F: Fn(Client<HttpsConnector<HttpConnector>>) -> G,
@@ -56,27 +55,31 @@ fn get_url_json<F>(url: String, cb: F)
     });
 }
 
+fn get_response_msg(data: Vec<CryptoCoin>, symbol: String) -> String {
+    let mut iter = data
+        .into_iter()
+        .filter(|ref x| x.symbol == symbol);
+    match iter.next() {
+        Some(crypto) => 
+            format!("${} | Change over last: Hour: {}% Day: {}% Week: {}%",
+                    crypto.price_usd,
+                    crypto.percent_change_1h,
+                    crypto.percent_change_24h,
+                    crypto.percent_change_7d
+            ),
+        None => "Unknown Coin".to_owned()
+    }
+
+}
+
 pub fn btc_price(command: CommandEvent, server: &IrcServer) {
     let supported_coins = ["btc", "eth", "xrp", "bch", "xlm", "ltc", "iota", "dash", "etc", "usdt"];
 
     if supported_coins.contains(&command.name.as_str()) {
         get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned(), |v: Vec<CryptoCoin>| {
             let symbol = command.name.as_str().to_uppercase();
-
-            let mut iter = v
-                .into_iter()
-                .filter(|ref x| x.symbol == symbol);
-            match iter.next() {
-                Some(crypto) => server.send_privmsg(
-                    command.channel.as_str(),
-                    format!("${} | Change over last: Hour: {}% Day: {}% Week: {}%",
-                            crypto.price_usd,
-                            crypto.percent_change_1h,
-                            crypto.percent_change_24h,
-                            crypto.percent_change_7d
-                ).as_str()),
-                None => server.send_privmsg(command.channel.as_str(), "Unknown Coin")
-            };
+            let response = get_response_msg(v, symbol);
+            server.send_privmsg(command.channel.as_str(), response.as_str()).unwrap();
         });
     }
 }
