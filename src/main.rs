@@ -1,10 +1,11 @@
 extern crate irc;
+mod btc;
+mod events;
 
 use std::default::Default;
-use std::vec::Vec;
 use irc::client::prelude::*;
 use irc::proto::message::Message;
-use std::fmt;
+use events::CommandEvent;
 
 fn main() {
     let cfg = Config {
@@ -20,15 +21,18 @@ fn main() {
     println!("Connecting...");
     server.identify().unwrap();
     println!("Ready!");
-    server.for_each_incoming(handle_message).unwrap();
+    server.for_each_incoming(|msg| {
+        handle_message(&server, msg);
+    }).unwrap();
 }
 
-fn handle_message(message: Message) {
+fn handle_message(server: &IrcServer, message: Message) {
     println!("{:?}", message);
     match message.command {
         Command::PRIVMSG(ref channel, ref msg) => {
             if msg.starts_with("!") {
                 let command = process_command(channel, msg);
+                btc::btc_price(command.clone(), &server);
                 println!("\t{:?}", command);
             }
         }
@@ -48,15 +52,3 @@ fn process_command(channel: &String, message: &String) -> CommandEvent {
     }
 }
 
-struct CommandEvent {
-    message: String,
-    name: String,
-    channel: String,
-    args: Vec<String>
-}
-
-impl fmt::Debug for CommandEvent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {} {:?}", self.channel, self.name, self.args)
-    }
-}
