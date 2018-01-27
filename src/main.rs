@@ -1,4 +1,6 @@
 extern crate irc;
+#[macro_use]
+extern crate serde_derive;
 mod btc;
 mod events;
 
@@ -42,7 +44,7 @@ fn handle_message(server: &IrcServer, message: Message) {
 
 fn process_command(channel: &String, message: &String) -> CommandEvent {
     let mut iter = message.split_whitespace();
-    let command = iter.next().unwrap();
+    let command = iter.next().unwrap().to_owned().trim_left_matches('!').to_owned();
 
     CommandEvent {
         message: message.to_owned(),
