@@ -12,27 +12,30 @@ use self::hyper::{Client};
 use self::hyper_tls::HttpsConnector;
 use tokio_core::{reactor};
 use futures::sync::mpsc::{UnboundedSender};
+use cached::TimedCache;
 
-fn get_url_json(url: String) -> hyper::Result<Vec<CryptoCoin>> {
-    let url = url.parse::<hyper::Uri>().unwrap();
-    let mut core = reactor::Core::new().unwrap();
-    let client = Client::configure()
-        .connector(HttpsConnector::new(4, &core.handle()).unwrap())
-        .build(&core.handle());
+cached!{ SLOW_FN: TimedCache = TimedCache::with_lifespan_and_capacity(180,10); >>
+         fn get_url_json(url: String) -> Vec<CryptoCoin> = {
+             let url = url.parse::<hyper::Uri>().unwrap();
+             let mut core = reactor::Core::new().unwrap();
+             let client = Client::configure()
+                 .connector(HttpsConnector::new(4, &core.handle()).unwrap())
+                 .build(&core.handle());
 
-    let work = client.get(url).and_then(|res| {
-        res.body().concat2().and_then(|body| {
-            let v: Vec<CryptoCoin> = serde_json::from_slice(&body).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    e
-                )
-            }).unwrap();
-            Ok(v)
-        })
-    });
+             let work = client.get(url).and_then(|res| {
+                 res.body().concat2().and_then(|body| {
+                     let v: Vec<CryptoCoin> = serde_json::from_slice(&body).map_err(|e| {
+                         io::Error::new(
+                             io::ErrorKind::Other,
+                             e
+                         )
+                     }).unwrap();
+                     Ok(v)
+                 })
+             });
 
-    core.run(work)
+             core.run(work).unwrap()
+         }
 }
 
 fn get_response_msg(data: Vec<CryptoCoin>, symbol: String) -> String {
@@ -55,27 +58,24 @@ pub fn btc_price(event: CommandEvent, tx: UnboundedSender<Action>) -> bool {
     let supported_coins = ["btc", "eth", "xrp", "bch", "xlm", "ltc", "iota", "dash", "etc", "usdt"];
 
     if supported_coins.contains(&event.name.as_str()) {
-        match get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned()) {
-            Ok(data) => {
-                let response = get_response_msg(data, event.name.as_str().to_uppercase());
-                let event_inner = event.clone();
-                tx.unbounded_send(Action {
-                    action: Box::new(move |server: &IrcClient| {
-                        server.send_privmsg(event_inner.channel.as_str(), response.clone().as_str()).unwrap();
-                    }),
-                    from: "cryptocoin".to_owned()
-                }).unwrap();
-            },
-            Err(_) => println!("Error hitting coinmarketcap API.")
-        }
+        let data = get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned());
+        let response = get_response_msg(data, event.name.as_str().to_uppercase());
+
+        tx.unbounded_send(Action {
+            action: Box::new(move |server: &IrcClient| {
+                server.send_privmsg(event.channel.as_str(), response.as_str()).unwrap();
+            }),
+            from: "cryptocoin".to_owned()
+        }).unwrap();
+
         true
     } else {
         false
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct CryptoCoin {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CryptoCoin {
     symbol: String,
     name: String,
     rank: String,

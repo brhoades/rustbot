@@ -14,5 +14,7 @@ tokio-core = { version = "^0.1" }
 serde_json = { version = "^1.0" }
 serde_derive = { version = "^1.0" }
 hyper-tls = { version = "^0.1" }
+cached = { version = "^0.4" }
+lazy_static = { version = "^1.0" }
 #"discord" = { version = "^0.7" }
 #"openssl-sys" = { version = "0.9.24" }

@@ -1,5 +1,7 @@
 extern crate irc;
 #[macro_use] extern crate serde_derive;
+#[macro_use] extern crate cached;
+#[macro_use] extern crate lazy_static;
 extern crate futures;
 extern crate tokio_core;
 
