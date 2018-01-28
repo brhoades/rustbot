@@ -6,11 +6,11 @@ extern crate futures;
 extern crate tokio_core;
 extern crate serde_json;
 
-
 mod btc;
 mod events;
 mod actions;
 mod util;
+mod irc_control;
 
 use std::default::Default;
 use std::thread;
@@ -84,7 +84,9 @@ fn handle_message(message: Message) -> Result<CommandEvent,()> {
 
 fn command_loop(rx: UnboundedReceiver<CommandEvent>, tx: UnboundedSender<Action>) {
     rx.for_each(|command| {
-        btc::btc_price(command.clone(), tx.clone());
+        if btc::btc_price(&command, &tx) {
+        } else if irc_control::command(&command, &tx) {
+        }
         Ok(())
     }).wait().unwrap();
 }
