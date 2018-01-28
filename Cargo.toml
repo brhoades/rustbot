@@ -6,7 +6,7 @@ authors = ["Billy Rhoades <billyarhoades@gmail.com>"]
 
 [dependencies]
 
-"irc" = { version = "^0.12" }
+"irc" = { version = "^0.13" }
 "hyper" = { version = "^0.11" }
 "serde" = { version = "^1.0" }
 futures = { version = "^0.1.17" }
@@ -14,5 +14,6 @@ tokio-core = { version = "^0.1" }
 serde_json = { version = "^1.0" }
 serde_derive = { version = "^1.0" }
 hyper-tls = { version = "^0.1" }
+chan = { version = "^0.1" }
 #"discord" = { version = "^0.7" }
 #"openssl-sys" = { version = "0.9.24" }

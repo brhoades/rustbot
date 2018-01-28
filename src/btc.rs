@@ -1,25 +1,26 @@
-extern crate futures;
 extern crate hyper;
-extern crate tokio_core;
 extern crate serde_json;
 extern crate hyper_tls;
 
 use std::io;
-use std::thread;
 use std::fmt::Debug;
-use irc::client::prelude::*;
+use std::boxed::Box;
 use events::CommandEvent;
-use self::futures::{Future,Stream};
+use actions::Action;
+use irc::client::prelude::*;
+use futures::{Future,Stream};
 use self::hyper::{Client};
 use self::hyper::client::{HttpConnector};
 use self::hyper_tls::HttpsConnector;
+use tokio_core::{reactor};
+use chan::{Sender};
 
 fn get_client<F,G>(cb: F)
     where F: Fn(Client<HttpsConnector<HttpConnector>>) -> G,
           G: Future,
           <G as Future>::Error: Debug {
 
-    let mut core = tokio_core::reactor::Core::new().unwrap();
+    let mut core = reactor::Core::new().unwrap();
     let client = Client::configure()
         .connector(HttpsConnector::new(4, &core.handle()).unwrap())
         .build(&core.handle());
@@ -69,17 +70,22 @@ fn get_response_msg(data: Vec<CryptoCoin>, symbol: String) -> String {
             ),
         None => "Unknown Coin".to_owned()
     }
-
 }
 
-pub fn btc_price(command: CommandEvent, server: &IrcServer) {
+pub fn btc_price(event: CommandEvent, tx: Sender<Action>) {
     let supported_coins = ["btc", "eth", "xrp", "bch", "xlm", "ltc", "iota", "dash", "etc", "usdt"];
 
-    if supported_coins.contains(&command.name.as_str()) {
+    if supported_coins.contains(&event.name.as_str()) {
         get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned(), |v: Vec<CryptoCoin>| {
-            let symbol = command.name.as_str().to_uppercase();
+            let symbol = event.name.as_str().to_uppercase();
             let response = get_response_msg(v, symbol);
-            server.send_privmsg(command.channel.as_str(), response.as_str()).unwrap();
+            let event_inner = event.clone();
+            tx.send(Action {
+                action: Box::new(move |server: IrcClient| {
+                    server.send_privmsg(event_inner.channel.as_str(), response.clone().as_str()).unwrap();
+                }),
+                from: "cryptocoin".to_owned()
+            });
         });
     }
 }
