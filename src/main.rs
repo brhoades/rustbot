@@ -4,10 +4,13 @@ extern crate irc;
 #[macro_use] extern crate lazy_static;
 extern crate futures;
 extern crate tokio_core;
+extern crate serde_json;
+
 
 mod btc;
 mod events;
 mod actions;
+mod util;
 
 use std::default::Default;
 use std::thread;

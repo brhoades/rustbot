@@ -1,42 +1,11 @@
-extern crate hyper;
-extern crate serde_json;
-extern crate hyper_tls;
-
-use std::io;
 use std::boxed::Box;
 use events::CommandEvent;
 use actions::Action;
 use irc::client::prelude::*;
-use futures::{Future,Stream};
-use self::hyper::{Client};
-use self::hyper_tls::HttpsConnector;
-use tokio_core::{reactor};
 use futures::sync::mpsc::{UnboundedSender};
-use cached::TimedCache;
+use util::get_url_json;
+use serde_json;
 
-cached!{ SLOW_FN: TimedCache = TimedCache::with_lifespan_and_capacity(180,10); >>
-         fn get_url_json(url: String) -> Vec<CryptoCoin> = {
-             let url = url.parse::<hyper::Uri>().unwrap();
-             let mut core = reactor::Core::new().unwrap();
-             let client = Client::configure()
-                 .connector(HttpsConnector::new(4, &core.handle()).unwrap())
-                 .build(&core.handle());
-
-             let work = client.get(url).and_then(|res| {
-                 res.body().concat2().and_then(|body| {
-                     let v: Vec<CryptoCoin> = serde_json::from_slice(&body).map_err(|e| {
-                         io::Error::new(
-                             io::ErrorKind::Other,
-                             e
-                         )
-                     }).unwrap();
-                     Ok(v)
-                 })
-             });
-
-             core.run(work).unwrap()
-         }
-}
 
 fn get_response_msg(data: Vec<CryptoCoin>, symbol: String) -> String {
     let mut iter = data
@@ -58,16 +27,19 @@ pub fn btc_price(event: CommandEvent, tx: UnboundedSender<Action>) -> bool {
     let supported_coins = ["btc", "eth", "xrp", "bch", "xlm", "ltc", "iota", "dash", "etc", "usdt"];
 
     if supported_coins.contains(&event.name.as_str()) {
-        let data = get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned());
-        let response = get_response_msg(data, event.name.as_str().to_uppercase());
-
-        tx.unbounded_send(Action {
-            action: Box::new(move |server: &IrcClient| {
-                server.send_privmsg(event.channel.as_str(), response.as_str()).unwrap();
-            }),
-            from: "cryptocoin".to_owned()
-        }).unwrap();
-
+        match get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned()) {
+            Ok(raw_data) => {
+                let data: Vec<CryptoCoin> = serde_json::from_str(raw_data.as_str()).unwrap();
+                let response = get_response_msg(data, event.name.as_str().to_uppercase());
+                tx.unbounded_send(Action {
+                    action: Box::new(move |server: &IrcClient| {
+                        server.send_privmsg(event.channel.as_str(), response.as_str()).unwrap();
+                    }),
+                    from: "cryptocoin".to_owned()
+                }).unwrap();
+            },
+            Err(()) => println!("Error communicating with coinmarketcap.")
+        }
         true
     } else {
         false
