@@ -4,7 +4,7 @@ use std::boxed::Box;
 
 pub struct Action {
     pub from: String,
-    pub action: Box<FnMut(IrcClient) -> () + Send>
+    pub action: Box<FnMut(&IrcClient) -> () + Send>
 }
 
 impl fmt::Debug for Action {

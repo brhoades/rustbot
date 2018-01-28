@@ -1,6 +1,5 @@
 extern crate irc;
 #[macro_use] extern crate serde_derive;
-#[macro_use] extern crate chan;
 extern crate futures;
 extern crate tokio_core;
 
@@ -15,12 +14,12 @@ use irc::client::PackedIrcClient;
 use irc::proto::message::Message;
 use events::CommandEvent;
 use actions::Action;
+use futures::sync::mpsc::{UnboundedSender,UnboundedReceiver,unbounded};
 
 fn main() {
-    let (command_tx, command_rx): (chan::Sender<CommandEvent>, chan::Receiver<CommandEvent>) = chan::async();
-    let (action_tx, action_rx): (chan::Sender<Action>, chan::Receiver<Action>) = chan::async();
+    let (command_tx, command_rx): (UnboundedSender<CommandEvent>, UnboundedReceiver<CommandEvent>) = unbounded();
+    let (action_tx, action_rx): (UnboundedSender<Action>, UnboundedReceiver<Action>) = unbounded();
     // let server = IrcServer::new("config.toml").unwrap();
-    let tick = chan::tick_ms(100);
 
     let server = thread::spawn(move || {
         let cfg = Config {
@@ -33,22 +32,26 @@ fn main() {
         };
 
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
-        let handle = reactor.handle();
         let future = IrcClient::new_future(reactor.handle(), &cfg).unwrap();
         let PackedIrcClient(client, future) = reactor.run(future).unwrap();
         client.identify().unwrap();
 
-        handle.spawn_fn(move || {
-            chan_select! {
-                default => println!("Timeout"),
-                action_rx.recv() -> action => println!("ACTION RECEIVED {:?}", action),
-            }
+        let handle = reactor.handle();
+        let client_stream = client.stream();
+
+        // Receive commands from command loop.
+        handle.spawn(action_rx.for_each(move |mut action| {
+            (action.action)(&client);
             Ok(())
-        });
-        reactor.run(client.stream().for_each(move |message| {
+        }));
+
+        // Dispatch messages for command processing
+        reactor.run(client_stream.for_each(move |message| {
             match handle_message(message) {
-                Ok(event) => command_tx.send(event),
-                Err(()) => ()
+                Ok(event) => {
+                    command_tx.unbounded_send(event).unwrap();
+                },
+                _ => ()
             }
             Ok(())
         }).join(future)).unwrap();
@@ -74,13 +77,11 @@ fn handle_message(message: Message) -> Result<CommandEvent,()> {
     Err(())
 }
 
-fn command_loop(rx: chan::Receiver<CommandEvent>, tx: chan::Sender<Action>) {
-    let command = rx.recv();
-
-    match command {
-        Some(event) => btc::btc_price(event.clone(), tx),
-        None => ()
-    }
+fn command_loop(rx: UnboundedReceiver<CommandEvent>, tx: UnboundedSender<Action>) {
+    rx.for_each(|command| {
+        btc::btc_price(command.clone(), tx.clone());
+        Ok(())
+    }).wait().unwrap();
 }
 
 fn process_command(channel: &String, message: &String) -> CommandEvent {
