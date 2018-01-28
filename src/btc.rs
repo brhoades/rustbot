@@ -28,7 +28,10 @@ pub fn btc_price(event: &CommandEvent, tx: &UnboundedSender<Action>) -> bool {
     if supported_coins.contains(&event.name.as_str()) {
         match get_url_json("https://api.coinmarketcap.com/v1/ticker/".to_owned()) {
             Ok(raw_data) => {
-                let data: Vec<CryptoCoin> = serde_json::from_str(raw_data.as_str()).unwrap();
+                // FIXME: Can't find out how to convert from a value so... convert back and again
+                let raw_data =  &serde_json::to_string(&raw_data).unwrap().to_owned();
+                let data: Vec<CryptoCoin> = serde_json::from_str(raw_data).unwrap();
+
                 let response = get_response_msg(data, event.name.as_str().to_uppercase());
                 let local_event = event.clone();
                 tx.unbounded_send(Action {
@@ -38,7 +41,7 @@ pub fn btc_price(event: &CommandEvent, tx: &UnboundedSender<Action>) -> bool {
                     from: "cryptocoin".to_owned()
                 }).unwrap();
             },
-            Err(()) => println!("Error communicating with coinmarketcap.")
+            Err(_) => println!("Error communicating with coinmarketcap.")
         }
         true
     } else {
