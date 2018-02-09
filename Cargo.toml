@@ -16,5 +16,6 @@ serde_derive = { version = "^1.0" }
 hyper-tls = { version = "^0.1" }
 cached = { version = "^0.4" }
 lazy_static = { version = "^1.0" }
+regex = { version = "^0.2" }
 #"discord" = { version = "^0.7" }
 #"openssl-sys" = { version = "0.9.24" }

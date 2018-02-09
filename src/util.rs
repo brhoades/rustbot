@@ -17,8 +17,6 @@ cached!{ SLOW_FN: TimedCache = TimedCache::with_lifespan_and_capacity(180,10); >
                  .build(&core.handle());
 
              let work = client.get(url).and_then(|res| {
-                 println!("Response: {}", res.status());
-
                  res.body().concat2().and_then(|body| {
                      let raw_data: Result<serde_json::Value, _> = serde_json::from_slice(&body);
                      println!("{:?}", raw_data);

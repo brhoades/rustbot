@@ -5,21 +5,25 @@ extern crate irc;
 extern crate futures;
 extern crate tokio_core;
 extern crate serde_json;
+extern crate regex;
 
 mod btc;
 mod events;
 mod actions;
 mod util;
 mod irc_control;
+mod command;
 
 use std::default::Default;
 use std::thread;
 use irc::client::prelude::*;
 use irc::client::PackedIrcClient;
 use irc::proto::message::Message;
-use events::CommandEvent;
 use actions::Action;
 use futures::sync::mpsc::{UnboundedSender,UnboundedReceiver,unbounded};
+use btc::{CryptoCoinCommand};
+use irc_control::{IRCControlCommand};
+use command::{CommandHandler,CommandEvent};
 
 fn main() {
     let (command_tx, command_rx): (UnboundedSender<CommandEvent>, UnboundedReceiver<CommandEvent>) = unbounded();
@@ -70,7 +74,7 @@ fn main() {
 fn handle_message(message: Message) -> Result<CommandEvent,()> {
     println!("{:?}", message);
     match message.command {
-        Command::PRIVMSG(ref channel, ref msg) => {
+        irc::client::prelude::Command::PRIVMSG(ref channel, ref msg) => {
             if msg.starts_with("!") {
                 let command = process_command(channel, msg);
                 println!("\t{:?}", command);
@@ -83,9 +87,19 @@ fn handle_message(message: Message) -> Result<CommandEvent,()> {
 }
 
 fn command_loop(rx: UnboundedReceiver<CommandEvent>, tx: UnboundedSender<Action>) {
-    rx.for_each(|command| {
-        if btc::btc_price(&command, &tx) {
-        } else if irc_control::command(&command, &tx) {
+    let modules: Vec<Box<CommandHandler>> = vec![
+        Box::new(CryptoCoinCommand {}),
+        Box::new(IRCControlCommand {})
+    ];
+
+    rx.for_each(|event| {
+        for module in &modules {
+            if module.handles_event(&event) {
+                match module.method(&event) {
+                    Ok(action) => tx.unbounded_send(action).unwrap(),
+                    Err(message) => println!("Error in {:?}: {:?}", module.get_name(), message)
+                }
+            }
         }
         Ok(())
     }).wait().unwrap();
