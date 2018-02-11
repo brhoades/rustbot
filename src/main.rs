@@ -8,7 +8,6 @@ extern crate serde_json;
 extern crate regex;
 
 mod btc;
-mod events;
 mod actions;
 mod util;
 mod irc_control;
@@ -48,7 +47,7 @@ fn main() {
         let handle = reactor.handle();
         let client_stream = client.stream();
 
-        // Receive commands from command loop.
+        // Receive events from command loop.
         handle.spawn(action_rx.for_each(move |mut action| {
             (action.action)(&client);
             Ok(())
